@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-postgres-secret
+  namespace: grafana
+type: kubernetes.io/basic-auth
+stringData:
+  username: grafana
+  password: grafanaPassword123!
+
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cluster-grafana
+  namespace: grafana
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.6
+  storage:
+    size: 20Gi
+  bootstrap:
+    initdb:
+      database: grafana
+      owner: grafana
+      secret:
+        name: grafana-postgres-secret
+
+

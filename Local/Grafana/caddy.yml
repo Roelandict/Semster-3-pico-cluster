@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-caddy-config
+  namespace: grafana
+data:
+  Caddyfile: |
+    :80
+    # Proxy only the root path to Grafana, return a real 404 for other paths
+    handle_path / {
+      reverse_proxy grafana:3000
+    }
+
+    # For any other path, return the custom 404 page with HTTP 404
+    handle {
+      respond "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Page not found</title>\n    <style>body { font-family: Arial, Helvetica, sans-serif; text-align: center; padding: 40px; } h1 { font-size: 48px; margin-bottom: 10px; } p { color: #666; }</style>\n  </head>\n  <body>\n    <h1>404 — Pagina niet gevonden</h1>\n    <p>De gevraagde pagina kon niet worden gevonden.</p>\n  </body>\n</html>" 404
+    }
+
+    handle_errors {
+      @4xx expression {http.error.status_code} >= 400 && {http.error.status_code} < 500
+      handle @4xx {
+        respond "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Page not found</title>\n    <style>body { font-family: Arial, Helvetica, sans-serif; text-align: center; padding: 40px; } h1 { font-size: 48px; margin-bottom: 10px; } p { color: #666; }</style>\n  </head>\n  <body>\n    <h1>404 — Pagina niet gevonden</h1>\n    <p>De gevraagde pagina kon niet worden gevonden.</p>\n  </body>\n</html>" 404
+      }
+
+      # fallback for non-4xx errors
+      handle {
+        respond "Internal Server Error" 500
+      }
+    }
+
+  custom_404.html: |
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Page not found</title>
+        <style>
+          body { font-family: Arial, Helvetica, sans-serif; text-align: center; padding: 40px; }
+          h1 { font-size: 48px; margin-bottom: 10px; }
+          p { color: #666; }
+        </style>
+      </head>
+      <body>
+        <h1>404 — Pagina niet gevonden</h1>
+        <p>De gevraagde pagina kon niet worden gevonden.</p>
+      </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caddy
+  namespace: grafana
+  labels:
+    app: caddy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: caddy
+  template:
+    metadata:
+      labels:
+        app: caddy
+    spec:
+      containers:
+        - name: caddy
+          image: caddy:2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy/Caddyfile
+              subPath: Caddyfile
+            - name: caddy-config
+              mountPath: /srv/custom_404.html
+              subPath: custom_404.html
+      volumes:
+        - name: caddy-config
+          configMap:
+            name: grafana-caddy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: caddy-ingress
+  namespace: grafana
+spec:
+  selector:
+    app: caddy
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+  type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: caddy
+  namespace: grafana
+spec:
+  rules:
+    - host: caddy.truck.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: caddy
+                port:
+                  number: 80
