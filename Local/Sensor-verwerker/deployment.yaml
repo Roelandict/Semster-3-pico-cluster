@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sensor-verwerker
+  namespace: default
+  labels:
+    app: sensor-verwerker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sensor-verwerker
+  template:
+    metadata:
+      labels:
+        app: sensor-verwerker
+    spec:
+      containers:
+      - name: sensor-verwerker
+        image: roelandvdberg/sensor-verwerker
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        

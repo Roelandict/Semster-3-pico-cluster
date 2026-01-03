@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: foodchain-db-cluster
+  namespace: foodchain-db
+spec:
+  instances: 3 
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  
+  storage:
+    size: 10Gi
+    storageClass: nfs-client 
+
+  bootstrap:
+    initdb:
+      database: foodchain_db
+      owner: sensor_admin

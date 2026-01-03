@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgrest
+  namespace: foodchain-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgrest
+  template:
+    metadata:
+      labels:
+        app: postgrest
+    spec:
+      containers:
+      - name: postgrest
+        image: postgrest/postgrest:v12.0.2
+        ports:
+        - containerPort: 3000
+        env:
+        - name: PGRST_DB_URI
+          value: "postgres://sensor_admin:password@foodchain-db-rw.svc.foodchain-db.cluster.local:5432/foodchain_db"
+        - name: PGRST_DB_SCHEMA
+          value: "public"
+        - name: PGRST_DB_ANON_ROLE
+          value: "web_anon"
+        - name: PGRST_JWT_SECRET
+          value: "super-secret-jwt-key-conform-plan-van-aanpak" 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgrest-service
+  namespace: foodchain-db
+  labels:
+    app: postgrest
+spec:
+  type: ClusterIP
+  selector:
+    app: postgrest
+  ports:
+    - name: http
+      protocol: TCP
+      port: 3000
+      targetPort: 3000
+

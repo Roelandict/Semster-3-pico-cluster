@@ -1,0 +1,32 @@
+CREATE TABLE currentTemperature (
+    id SERIAL PRIMARY KEY,
+    sensor_id TEXT NOT NULL,      -- Bevat de VIN-gekoppelde ID [cite: 1069]
+    temperatureAvg FLOAT NOT NULL,
+    units TEXT DEFAULT 'Celsius',
+    truckId INT NOT NULL,
+    measured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE currentPsi (
+    id SERIAL PRIMARY KEY,
+    sensor_id TEXT NOT NULL,
+    PSI FLOAT NOT NULL,
+    wheelId INT NOT NULL,
+    truckId INT NOT NULL,
+    measured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE currentLocatieTruck (
+    id SERIAL PRIMARY KEY,
+    sensor_id TEXT NOT NULL,
+    gpsLocatie TEXT NOT NULL,
+    truckId INT NOT NULL,
+    measured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE garageLocatie (
+    garageId SERIAL PRIMARY KEY,
+    garageName TEXT NOT NULL,
+    gpsLocatie TEXT NOT NULL
+);
