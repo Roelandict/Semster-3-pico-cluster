@@ -1,0 +1,63 @@
+# Optional: Kubernetes Monitoring Configuration
+# Deploy met: kubectl apply -f k8s-monitoring.yaml
+# Vereist: Prometheus Operator geïnstalleerd
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sensor-verwerker
+  namespace: foodchain-db
+  labels:
+    app: sensor-verwerker
+spec:
+  selector:
+    matchLabels:
+      app: sensor-verwerker
+  endpoints:
+  - port: metrics
+    interval: 30s
+    scrapeTimeout: 10s
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sensor-verwerker-alerts
+  namespace: foodchain-db
+  labels:
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: sensor-verwerker.rules
+    interval: 30s
+    rules:
+    - alert: SensorVerwerkerDown
+      expr: up{job="sensor-verwerker"} == 0
+      for: 2m
+      labels:
+        severity: critical
+        component: sensor-verwerker
+      annotations:
+        summary: "Sensor-verwerker pod is down"
+        description: "Sensor-verwerker has been down for more than 2 minutes"
+    
+    - alert: SensorVerwerkerHighMemory
+      expr: container_memory_usage_bytes{pod=~"sensor-verwerker.*"} > 100000000
+      for: 5m
+      labels:
+        severity: warning
+        component: sensor-verwerker
+      annotations:
+        summary: "Sensor-verwerker high memory usage"
+        description: "Memory usage is above 100MB for 5 minutes"
+    
+    - alert: SensorVerwerkerHighCPU
+      expr: rate(container_cpu_usage_seconds_total{pod=~"sensor-verwerker.*"}[5m]) > 0.2
+      for: 5m
+      labels:
+        severity: warning
+        component: sensor-verwerker
+      annotations:
+        summary: "Sensor-verwerker high CPU usage"
+        description: "CPU usage is above 20% for 5 minutes"

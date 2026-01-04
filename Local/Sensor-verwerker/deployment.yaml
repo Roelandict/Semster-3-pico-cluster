@@ -2,9 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sensor-verwerker
-  namespace: default
+  namespace: foodchain-db
   labels:
     app: sensor-verwerker
+    version: "1.0.0"
 spec:
   replicas: 1
   selector:
@@ -15,15 +16,142 @@ spec:
       labels:
         app: sensor-verwerker
     spec:
+      # Node selector voor Raspberry Pi (ARM64)
+      # Voor AMD64, wijzig naar: kubernetes.io/arch: amd64
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      
+      serviceAccountName: sensor-sa
+      
+      # Security context op pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody user
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      
       containers:
       - name: sensor-verwerker
-        image: roelandvdberg/sensor-verwerker
+        image: roelandvdberg/sensor-verwerker:latest
         imagePullPolicy: Always
+        
+        # Security context op container level
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        
         resources:
           requests:
             memory: "64Mi"
             cpu: "100m"
           limits:
             memory: "128Mi"
-            cpu: "200m"
+            cpu: "250m"
         
+        # Liveness probe
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - ps aux | grep sensor-verwerker | grep -v grep || exit 1
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Startup probe (geeft meer tijd om op te starten)
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - ps aux | grep sensor-verwerker | grep -v grep || exit 1
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 5
+        
+        # Environment variables
+        env:
+        - name: TZ
+          value: "Europe/Amsterdam"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      
+      # Pod disruption budget voor high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sensor-verwerker
+              topologyKey: kubernetes.io/hostname
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 15
+
+---
+# PodDisruptionBudget voor uptime
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sensor-verwerker-pdb
+  namespace: foodchain-db
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sensor-verwerker
+
+---
+# NetworkPolicy voor isolatie (optional maar aanbevolen)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sensor-verwerker-network-policy
+  namespace: foodchain-db
+spec:
+  podSelector:
+    matchLabels:
+      app: sensor-verwerker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: foodchain-db
+    ports:
+    - protocol: TCP
+      port: 3000
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

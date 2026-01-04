@@ -43,7 +43,7 @@ spec:
             - name: GF_DATABASE_NAME
               value: "grafana"
             - name: GF_DATABASE_USER
-              value: "grafana_user"
+              value: "grafana"
             - name: GF_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

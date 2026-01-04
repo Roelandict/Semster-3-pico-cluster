@@ -20,13 +20,16 @@ spec:
         - containerPort: 3000
         env:
         - name: PGRST_DB_URI
-          value: "postgres://sensor_admin:password@foodchain-db-rw.svc.foodchain-db.cluster.local:5432/foodchain_db"
+          valueFrom:
+            secretKeyRef:
+              name: sensor-admin-secret
+              key: db-uri
         - name: PGRST_DB_SCHEMA
           value: "public"
         - name: PGRST_DB_ANON_ROLE
           value: "web_anon"
         - name: PGRST_JWT_SECRET
-          value: "super-secret-jwt-key-conform-plan-van-aanpak" 
+          value: "super-secret-jwt-key-conform-plan-van-aanpak"
 ---
 apiVersion: v1
 kind: Service

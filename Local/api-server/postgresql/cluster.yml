@@ -1,3 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/config/crd/bases/postgresql.cnpg.io_clusters.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sensor-admin-secret
+  namespace: foodchain-db
+type: kubernetes.io/basic-auth
+stringData:
+  username: sensor_admin
+  password: password
+  db-uri: "postgres://sensor_admin:password@foodchain-db-cluster-rw.foodchain-db.svc.cluster.local:5432/foodchain_db"
+---
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -7,11 +19,31 @@ spec:
   instances: 3 
   imageName: ghcr.io/cloudnative-pg/postgresql:16
   
+  postgresql:
+    pg_hba:
+      - "host all sensor_admin 0.0.0.0/0 scram-sha-256"
+      - "host all sensor_admin ::0/0 scram-sha-256"
+      
+    parameters:
+      shared_buffers: "256MB"
+      max_connections: "200"
+  managed:
+     roles:
+      - name: sensor_admin
+        superuser: true
+        login: true
+        passwordSecret:
+          name: sensor-admin-secret
+      - name: grafana
+        superuser: false
+  
   storage:
     size: 10Gi
-    storageClass: nfs-client 
-
+    storageClass: nfs-client # Consider using a block storage class if available
+  
   bootstrap:
     initdb:
       database: foodchain_db
       owner: sensor_admin
+
+

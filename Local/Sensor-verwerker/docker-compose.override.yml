@@ -1,0 +1,55 @@
+# Docker Compose override voor development
+# Gebruik: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: '3.9'
+
+services:
+  sensor-verwerker:
+    # Remove security restrictions for development
+    security_opt: []
+    cap_drop: []
+    read_only: false
+    
+    # Run as current user for development
+    user: root
+    
+    # More relaxed resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Mount source code for live reload
+    volumes:
+      - .:/workspace
+      - /workspace/vendor
+    
+    # Better logging for debugging
+    environment:
+      LOG_LEVEL: "DEBUG"
+    
+    # Interactive shell
+    stdin_open: true
+    tty: true
+
+  postgres-test:
+    # Relaxed settings for development
+    environment:
+      POSTGRES_INITDB_ARGS: "-c log_statement=all"
+    
+    # Persistent volume for development
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+
+  postgrest-test:
+    environment:
+      PGRST_DB_ANON_ROLE: "sensor_admin"
+      PGRST_LOG_LEVEL: "info"
+
+volumes:
+  postgres-dev-data:
+    driver: local

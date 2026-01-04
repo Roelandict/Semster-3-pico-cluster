@@ -1,0 +1,315 @@
+# Kubernetes configuratie voor Sensor-verwerker
+# Deploy met: kubectl apply -f k8s/
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: foodchain-db
+  labels:
+    name: foodchain-db
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sensor-verwerker
+  namespace: foodchain-db
+  labels:
+    app: sensor-verwerker
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sensor-verwerker
+  namespace: foodchain-db
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sensor-verwerker
+  namespace: foodchain-db
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sensor-verwerker
+subjects:
+- kind: ServiceAccount
+  name: sensor-verwerker
+  namespace: foodchain-db
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sensor-verwerker-config
+  namespace: foodchain-db
+data:
+  TZ: "Europe/Amsterdam"
+  LOG_LEVEL: "INFO"
+  TRUCK_VIN: "FC-TRUCK-2026-X99"
+  TRUCK_ID: "42"
+  SENSOR_COUNT: "30"
+  # API endpoint wordt via service discovery bereikt
+  POSTGREST_HOST: "postgrest-service"
+  POSTGREST_PORT: "3000"
+  POSTGREST_SCHEMA: "currentTemperature"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sensor-verwerker
+  namespace: foodchain-db
+  labels:
+    app: sensor-verwerker
+    version: "1.0.0"
+  annotations:
+    description: "Sensor data aggregation and transmission to PostgREST API"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sensor-verwerker
+  template:
+    metadata:
+      labels:
+        app: sensor-verwerker
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      # Node selection
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      
+      serviceAccountName: sensor-verwerker
+      
+      # Pod-level security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534  # nobody user
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Graceful shutdown
+      terminationGracePeriodSeconds: 30
+      
+      # Restart policy
+      restartPolicy: Always
+      
+      # DNS policy
+      dnsPolicy: ClusterFirst
+      
+      # Pod priority
+      priorityClassName: ""
+      
+      containers:
+      - name: sensor-verwerker
+        image: roelandvdberg/sensor-verwerker:latest
+        imagePullPolicy: Always
+        
+        # Container-level security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65534
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        
+        # Ports
+        ports:
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        
+        # Resource management
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "250m"
+        
+        # Liveness probe - controleert of proces nog draait
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - ps aux | grep sensor-verwerker | grep -v grep || exit 1
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Startup probe - geeft meer tijd voor initial start
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - ps aux | grep sensor-verwerker | grep -v grep || exit 1
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 10
+          successThreshold: 1
+        
+        # Environment variables via ConfigMap
+        envFrom:
+        - configMapRef:
+            name: sensor-verwerker-config
+        
+        # Additional environment variables
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Volume mounts
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: var-run
+          mountPath: /var/run
+      
+      # Volumes
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: var-run
+        emptyDir: {}
+      
+      # Affinity rules
+      affinity:
+        # Pod anti-affinity - voorkies meerdere pods op dezelfde node
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - sensor-verwerker
+              topologyKey: kubernetes.io/hostname
+        
+        # Node affinity - voorkeur voor specifieke nodes
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - sensor-node
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sensor-verwerker-service
+  namespace: foodchain-db
+  labels:
+    app: sensor-verwerker
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: sensor-verwerker
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sensor-verwerker-pdb
+  namespace: foodchain-db
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: sensor-verwerker
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sensor-verwerker-hpa
+  namespace: foodchain-db
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sensor-verwerker
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 1
+        periodSeconds: 15
+      selectPolicy: Max

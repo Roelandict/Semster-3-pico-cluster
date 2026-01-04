@@ -1,0 +1,100 @@
+version: '3.9'
+
+services:
+  sensor-verwerker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGETARCH: amd64
+    container_name: sensor-verwerker
+    restart: unless-stopped
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    
+    # User configuration
+    user: "65534:65534"  # nobody user for security
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ps aux | grep sensor-verwerker | grep -v grep || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Environment
+    environment:
+      TZ: "Europe/Amsterdam"
+      LOG_LEVEL: "INFO"
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "app=sensor-verwerker"
+
+  # Optional: PostgreSQL local untuk testing
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: postgres-test
+    environment:
+      POSTGRES_DB: foodchain_db
+      POSTGRES_USER: sensor_admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sensor_admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: PostgREST local untuk testing
+  postgrest-test:
+    image: postgrest/postgrest:latest
+    container_name: postgrest-test
+    environment:
+      PGRST_DB_URI: "postgres://sensor_admin:password@postgres-test:5432/foodchain_db"
+      PGRST_DB_SCHEMA: "public"
+      PGRST_DB_ANON_ROLE: "web_anon"
+      PGRST_JWT_SECRET: "super-secret-jwt-key-conform-plan-van-aanpak"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres-test
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  default:
+    name: sensor-network
+    driver: bridge

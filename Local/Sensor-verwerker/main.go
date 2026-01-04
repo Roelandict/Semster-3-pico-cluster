@@ -2,19 +2,25 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
 )
 
 const (
-	PostgrestAPI = "http://192.168.1.10:30000/currentTemperature"
-	TruckVIN     = "FC-TRUCK-2026-X99"
-	TruckID      = 42
-	SensorCount  = 30
+	PostgrestBase = "http://postgrest-service.foodchain-db.svc.cluster.local:3000"
+	PostgrestAPI  = PostgrestBase + "/currenttemperature"
+	JWTSecret     = "super-secret-jwt-key-conform-plan-van-aanpak"
+	TruckVIN      = "FC-TRUCK-2026-X99"
+	TruckID       = 42
+	SensorCount   = 30
 )
 
 type Sensor struct {
@@ -25,14 +31,27 @@ type Sensor struct {
 
 type TemperaturePayload struct {
 	SensorID       string  `json:"sensor_id"`
-	TemperatureAvg float64 `json:"temperatureAvg"`
+	TemperatureAvg float64 `json:"temperature_avg"`
 	Units          string  `json:"units"`
-	TruckID        int     `json:"truckId"`
+	TruckID        int     `json:"truck_id"`
+}
+
+// JWTClaims represents the JWT payload
+type JWTClaims struct {
+	Role      string `json:"role"`
+	IssuedAt  int64  `json:"iat"`
+	ExpiresAt int64  `json:"exp"`
 }
 
 func main() {
 	fmt.Printf("Pico-cluster Edge Processor gestart voor Truck %s\n", TruckVIN)
 	rand.Seed(time.Now().UnixNano())
+
+	// Test PostgREST connection first
+	fmt.Println("Testing PostgREST connectivity...")
+	if !testPostgRESTConnection() {
+		fmt.Println("Warning: PostgREST connection test failed, will continue anyway")
+	}
 
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -43,6 +62,35 @@ func main() {
 	for range ticker.C {
 		sendSensorData()
 	}
+}
+
+// testPostgRESTConnection checks if PostgREST is reachable
+func testPostgRESTConnection() bool {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	// Test basic connectivity
+	resp, err := client.Get(PostgrestBase)
+	if err != nil {
+		fmt.Printf("[ERROR] Cannot reach PostgREST at %s: %v\n", PostgrestBase, err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	fmt.Printf("[OK] PostgREST is reachable at %s (HTTP %d)\n", PostgrestBase, resp.StatusCode)
+
+	// Try to list available tables/endpoints
+	resp, err = client.Get(PostgrestBase + "/")
+	if err == nil {
+		defer resp.Body.Close()
+		fmt.Printf("[OK] PostgREST OpenAPI available (HTTP %d)\n", resp.StatusCode)
+	}
+
+	return true
 }
 
 func sendSensorData() {
@@ -93,20 +141,66 @@ func calculateAverage(sensors []Sensor) float64 {
 	return total / float64(len(sensors))
 }
 
+// generateJWT creates a JWT token signed with HMAC-SHA256
+func generateJWT() (string, error) {
+	now := time.Now()
+	claims := JWTClaims{
+		Role:      "sensor_admin",
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(1 * time.Hour).Unix(),
+	}
+
+	// Create header
+	header := map[string]string{
+		"alg": "HS256",
+		"typ": "JWT",
+	}
+
+	headerJSON, err := json.Marshal(header)
+	if err != nil {
+		return "", err
+	}
+
+	claimsJSON, err := json.Marshal(claims)
+	if err != nil {
+		return "", err
+	}
+
+	// Encode header and claims to base64
+	headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
+	claimsEncoded := base64.RawURLEncoding.EncodeToString(claimsJSON)
+
+	// Create signature
+	message := headerEncoded + "." + claimsEncoded
+	h := hmac.New(sha256.New, []byte(JWTSecret))
+	h.Write([]byte(message))
+	signature := base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+
+	return message + "." + signature, nil
+}
+
 func sendToPostgREST(p TemperaturePayload) {
 	jsonData, err := json.Marshal(p)
 	if err != nil {
-		fmt.Printf("Fout bij JSON encoding: %v\n", err)
+		fmt.Printf("[ERROR] JSON encoding failed: %v\n", err)
+		return
+	}
+
+	// Generate JWT token
+	token, err := generateJWT()
+	if err != nil {
+		fmt.Printf("[ERROR] JWT generation failed: %v\n", err)
 		return
 	}
 
 	req, err := http.NewRequest("POST", PostgrestAPI, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Printf("Fout bij aanmaken request: %v\n", err)
+		fmt.Printf("[ERROR] Request creation failed: %v\n", err)
 		return
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
@@ -117,15 +211,41 @@ func sendToPostgREST(p TemperaturePayload) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		fmt.Printf("Verbindingsfout naar Hoofdserver: %v\n", err)
+		fmt.Printf("[ERROR] Connection failed: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
-		fmt.Printf("[%s] %d sensoren geaggregeerd. Gemiddelde: %.2f°C verzonden naar DB.\n",
+	// Read response body for better error messages
+	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyStr := string(bodyBytes)
+
+	// Handle different status codes
+	switch {
+	case resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK:
+		fmt.Printf("[%s] SUCCESS: %d sensoren geaggregeerd. Gemiddelde: %.2f°C verzonden naar DB.\n",
 			time.Now().Format("15:04:05"), SensorCount, p.TemperatureAvg)
-	} else {
-		fmt.Printf("[%s] API antwoord: %d\n", time.Now().Format("15:04:05"), resp.StatusCode)
+
+	case resp.StatusCode == http.StatusNotFound:
+		fmt.Printf("[%s] ERROR 404: PostgREST endpoint niet gevonden!\n", time.Now().Format("15:04:05"))
+		fmt.Printf("  API URL: %s\n", PostgrestAPI)
+		fmt.Printf("  Response: %s\n", bodyStr)
+		fmt.Println("  OPOSSING: Check dat de 'currentTemperature' tabel bestaat in PostgREST schema")
+
+	case resp.StatusCode == http.StatusUnauthorized:
+		fmt.Printf("[%s] ERROR 401: JWT Authentication failed\n", time.Now().Format("15:04:05"))
+		fmt.Printf("  Response: %s\n", bodyStr)
+
+	case resp.StatusCode == http.StatusForbidden:
+		fmt.Printf("[%s] ERROR 403: Permission denied\n", time.Now().Format("15:04:05"))
+		fmt.Printf("  Response: %s\n", bodyStr)
+
+	case resp.StatusCode == http.StatusBadRequest:
+		fmt.Printf("[%s] ERROR 400: Bad request\n", time.Now().Format("15:04:05"))
+		fmt.Printf("  Payload: %s\n", string(jsonData))
+		fmt.Printf("  Response: %s\n", bodyStr)
+
+	default:
+		fmt.Printf("[%s] HTTP %d: %s\n", time.Now().Format("15:04:05"), resp.StatusCode, bodyStr)
 	}
 }

@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgresql-init-sql
+  namespace: foodchain-db
+data:
+  init-schema.sql: |
+    -- Initialize foodchain_db schema for sensor data
+    -- Execute as sensor_admin user
+
+    -- Create currentTemperature table
+    CREATE TABLE IF NOT EXISTS public.currentTemperature (
+        id BIGSERIAL PRIMARY KEY,
+        sensor_id TEXT NOT NULL,
+        temperature_avg NUMERIC(5, 2) NOT NULL,
+        units TEXT DEFAULT 'Celsius',
+        truck_id INTEGER NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create indexes for better performance
+    CREATE INDEX IF NOT EXISTS idx_currentTemperature_truck_id ON public.currentTemperature(truck_id);
+    CREATE INDEX IF NOT EXISTS idx_currentTemperature_sensor_id ON public.currentTemperature(sensor_id);
+    CREATE INDEX IF NOT EXISTS idx_currentTemperature_created_at ON public.currentTemperature(created_at);
+
+    -- Grant permissions to sensor_admin role
+    GRANT ALL PRIVILEGES ON TABLE public.currentTemperature TO sensor_admin;
+    GRANT ALL PRIVILEGES ON SEQUENCE public.currentTemperature_id_seq TO sensor_admin;
+
+    -- Allow web_anon role to select (read-only)
+    GRANT SELECT ON TABLE public.currentTemperature TO web_anon;
+
+    -- Enable Row Level Security
+    ALTER TABLE public.currentTemperature ENABLE ROW LEVEL SECURITY;
+
+    -- Create RLS policy for web_anon (can only read)
+    CREATE POLICY select_currenttemperature ON public.currentTemperature 
+        FOR SELECT USING (true);
+
+    -- Create RLS policy for sensor_admin (can do all operations)
+    CREATE POLICY all_currenttemperature ON public.currentTemperature 
+        FOR ALL USING (true);
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgresql-init-schema
+  namespace: foodchain-db
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: postgresql-init
+      containers:
+      - name: postgresql-init
+        image: postgres:16-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Initializing PostgreSQL schema..."
+          psql -h foodchain-db-cluster-rw.foodchain-db.svc.cluster.local \
+               -U sensor_admin \
+               -d foodchain_db \
+               -f /sql/init-schema.sql
+          echo "Schema initialization complete!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sensor-admin-secret
+              key: password
+        volumeMounts:
+        - name: sql-script
+          mountPath: /sql
+      restartPolicy: Never
+      volumes:
+      - name: sql-script
+        configMap:
+          name: postgresql-init-sql
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgresql-init
+  namespace: foodchain-db
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: postgresql-init
+  namespace: foodchain-db
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: postgresql-init
+  namespace: foodchain-db
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: postgresql-init
+subjects:
+- kind: ServiceAccount
+  name: postgresql-init
+  namespace: foodchain-db

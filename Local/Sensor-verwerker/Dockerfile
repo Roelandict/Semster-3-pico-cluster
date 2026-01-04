@@ -1,4 +1,4 @@
-# Build stage
+# Build stage - Multi-platform support
 FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
@@ -8,15 +8,30 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o sensor-verwerker .
+# Build for the target platform (ARM64 for Raspberry Pi, AMD64 for standard Linux)
+# Docker automatically sets TARGETARCH at build time
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o sensor-verwerker .
 
 # Runtime stage
 FROM alpine:latest
 
+# Install ca-certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create non-root user for security
+RUN addgroup -S app && adduser -S app -G app
 
-COPY --from=builder /app/sensor-verwerker .
+# Set working directory with proper permissions
+WORKDIR /home/app
 
-CMD ["./sensor-verwerker"]
+# Copy binary from builder
+COPY --from=builder --chown=app:app /app/sensor-verwerker .
+
+# Switch to non-root user
+USER app
+
+# Health check (optional but recommended)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ps aux | grep sensor-verwerker | grep -v grep || exit 1
+
+ENTRYPOINT ["./sensor-verwerker"]
