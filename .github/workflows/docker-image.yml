@@ -20,4 +20,4 @@ jobs:
         password: ${{ secrets.PASSWORDDOCKER }}
     - uses: actions/checkout@v4
     - name: Build the Docker image
-      run: docker buildx build  --platform linux/amd64,linux/arm64  --push  -t roelandvdberg/sensor-verwerker:1-${{ github.sha }} ./Local/Sensor-verwerker
+      run:  docker & docker buildx build  --platform linux/arm64  --push  -t roelandvdberg/sensor-verwerker:1-${{ github.sha }} ./Local/Sensor-verwerker
