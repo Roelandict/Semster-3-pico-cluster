@@ -14,9 +14,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -o sensor-verwerker .
 
 # Runtime stage
 FROM alpine:latest
+USER root
 
 # Install ca-certificates for HTTPS
-# RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates
 
 # Create non-root user for security
 RUN addgroup -S app && adduser -S app -G app
