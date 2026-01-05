@@ -53,6 +53,9 @@ jobs:
     - name: Make test script executable
       run: chmod +x Local/Sensor-verwerker/test-deployment.sh
     
+    - name: create ns foodchain-db
+      run: kubectl create namespace foodchain-db || echo "Namespace foodchain-db already exists"
+      
     - name: Run deployment tests
       run: ./Local/Sensor-verwerker/test-deployment.sh
       continue-on-error: false
