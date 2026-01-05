@@ -1,7 +1,6 @@
 # Kubernetes configuratie voor Sensor-verwerker
 # Deploy met: kubectl apply -f k8s/
 
----
 apiVersion: v1
 kind: Namespace
 metadata:
