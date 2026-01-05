@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "glpi.fullname" . }}
+  labels:
+    {{- include "glpi.labels" . | nindent 4 }}
+  annotations:
+    # Trigger voor Cert-Manager om het certificaat via Cloudflare aan te vragen
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Traefik specifieke instellingen
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      # Dit is de naam van het secret dat Cert-Manager zal aanmaken
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # Dit verwijst naar de GLPI service (niet de DB)
+                name: {{ include "glpi.fullname" . }}
+                port:
+                  number: 80
+{{- end }}

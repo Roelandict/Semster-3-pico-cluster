@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-glpi
+  annotations:
+    # Optioneel: specificeer de controller (bijv. nginx)
+spec:
+  ingressClassName: "traefik"
+  rules:
+  - host: helpdesk.test.famivandenberg.nl  # Vervang door jouw domeinnaam
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: my-glpi  # Naam van de Kubernetes Service
+            port:
+              number: 80             # Poort van de Service

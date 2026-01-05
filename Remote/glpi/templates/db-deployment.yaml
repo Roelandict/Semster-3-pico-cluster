@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "glpi.fullname" . }}-db
+spec:
+  strategy:
+    type: Recreate # Belangrijk: voorkom dat 2 pods tegelijk naar dezelfde DB schrijven
+  selector:
+    matchLabels:
+      app: glpi-db
+  template:
+    metadata:
+      labels:
+        app: glpi-db
+    spec:
+      containers:
+        - name: mariadb
+          image: {{ .Values.mariadb.image }}
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              value: {{ .Values.mariadb.auth.rootPassword | quote }}
+            - name: MARIADB_DATABASE
+              value: {{ .Values.mariadb.auth.database | quote }}
+            - name: MARIADB_USER
+              value: {{ .Values.mariadb.auth.user | quote }}
+            - name: MARIADB_PASSWORD
+              value: {{ .Values.mariadb.auth.password | quote }}
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: {{ include "glpi.fullname" . }}-db-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "glpi.fullname" . }}-db
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: glpi-db

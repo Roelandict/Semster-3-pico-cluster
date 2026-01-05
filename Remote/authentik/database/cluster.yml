@@ -1,0 +1,26 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cluster-authentik
+  namespace: authentik          # of jouw namespace
+spec:
+  instances: 1                  # voor test; voor HA bv. 3
+
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+
+  storage:
+    size: 20Gi
+    # storageClass: "longhorn"  # of jouw CSI class, of weglaten voor default
+
+  superuserSecret:
+    name: cluster-authentik-superuser   # maak je zelf aan
+
+  bootstrap:
+    initdb:
+      database: authentik
+      owner: authentik
+      secret:
+        name: cluster-authentik-app     # secret met user/password
+
+  monitoring:
+    enablePodMonitor: false

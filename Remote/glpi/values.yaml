@@ -1,0 +1,36 @@
+# GLPI instellingen
+glpi:
+  image: glpi/glpi:latest
+  servicePort: 80
+
+# MariaDB instellingen (Officiële Docker Hub image)
+mariadb:
+  image: mariadb:10.11
+  auth:
+    rootPassword: "rootpassword123"
+    database: glpi_db
+    user: glpi_user
+    password: "glpipassword123"
+
+# Persistentie (optioneel, maar aangeraden voor de database)
+persistence:
+  enabled: true
+  storageClass: "" # Laat leeg voor default
+  glpi:
+    size: 5Gi
+  mariadb:
+    size: 8Gi
+
+ingress:
+  enabled: true
+  className: "traefik"
+  host: "helpdesk.test.famivandenberg.nl"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.entrypoints: "websecure"
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Als je SSL gebruikt (Cert-Manager), voeg dan ook deze toe:
+    # traefik.ingress.kubernetes.io/router.tls: "true"
+  tls:
+    enabled: true
+    secretName: "glpi-tls-cert"

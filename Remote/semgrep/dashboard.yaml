@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semgrep-dashboard
+  namespace: securecodebox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: semgrep-dashboard
+  template:
+    metadata:
+      labels:
+        app: semgrep-dashboard
+    spec:
+      containers:
+        - name: semgrep-dashboard
+          image: nginx:stable-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: repo-pvc
+              mountPath: /usr/share/nginx/html/reports
+      volumes:
+        - name: repo-pvc
+          persistentVolumeClaim:
+            claimName: semgrep-picotruckcluster-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semgrep-dashboard
+  namespace: securecodebox
+spec:
+  selector:
+    app: semgrep-dashboard
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

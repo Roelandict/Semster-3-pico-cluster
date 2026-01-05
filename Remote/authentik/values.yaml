@@ -1,0 +1,35 @@
+authentik:
+  secret_key: "PleaseGenerateASecureKey"
+  env:
+    - name: AUTHENTIK_EXTERNAL_HOST
+      value: "auth.test.famivandenberg.nl"
+  error_reporting:
+    enabled: true
+
+  # Externe Postgres (CloudNativePG)
+  postgresql:
+    host: "cluster-authentik-rw"        # CNPG read/write service
+    name: "authentik"            # database naam
+    user: "authentik"            # db user
+    password: "w63p16sZEoqtkYYSSh1GXhP2UlRuA1B+KX3OCgspP4X6JdqSTVgzyrHPKcnjTmigE33mmOyNDTd/L9L7u"
+    port: 5432
+
+server:
+  ingress:
+    ingressClassName: traefik
+    enabled: true
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+    hosts:
+      - auth.test.famivandenberg.nl
+    tls:
+      - secretName: authentik-tls
+        hosts:
+          - auth.test.famivandenberg.nl
+
+# Interne Bitnami-Postgres UIT
+postgresql:
+  enabled: false
+

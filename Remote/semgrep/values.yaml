@@ -1,0 +1,72 @@
+apiVersion: execution.securecodebox.io/v1
+kind: Scan
+metadata:
+  name: semgrep-picotruckcluster
+  namespace: securecodebox
+spec:
+  # persistent volume claim i.p.v. emptyDir:
+  volumes:
+    - name: repo-pvc
+      persistentVolumeClaim:
+        claimName: semgrep-picotruckcluster-pvc
+
+  volumeMounts:
+    - mountPath: "/repo/"
+      name: repo-pvc
+
+  initContainers:
+    - name: provision-git
+      image: alpine/git
+      volumeMounts:
+        - mountPath: "/repo/"
+          name: repo-pvc
+      command:
+        - sh
+        - -c
+        - |
+          git clone https://github.com/Roelandict/PicoTruckCluster /repo/PicoTruckCluster
+
+  scanType: "semgrep"
+  parameters:
+    - "-c"
+    - "p/ci"            # of bv. "p/security-audit"
+    - "/repo/PicoTruckCluster"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semgrep-picotruckcluster-pvc
+  namespace: securecodebox
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: semgrep-dashboard
+  namespace: securecodebox
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    kubernetes.io/ingress.class: "traefik"   # of je eigen ingressClass
+spec:
+  tls:
+    - hosts:
+        - semgrep.test.famivandenberg.nl
+      secretName: semgrep-tls
+  rules:
+    - host: semgrep.test.famivandenberg.nl
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: semgrep-dashboard
+                port:
+                  number: 80
+
