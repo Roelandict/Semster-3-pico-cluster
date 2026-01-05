@@ -121,7 +121,7 @@ func simulateZoneSensors(count int) []Sensor {
 			temp = -18.0 + (rand.Float64() * 0.4)
 		} else {
 			zone = "Back"
-			temp = -17.8 + (rand.Float64()*0.8 + 1) // + 1 only for testing
+			temp = -17.8 + (rand.Float64()*0.8 + 6.7) // + 1 only for testing = test change for ayoub
 		}
 
 		sensors = append(sensors, Sensor{
