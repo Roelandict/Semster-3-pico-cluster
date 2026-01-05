@@ -115,12 +115,11 @@ kind: PodDisruptionBudget
 metadata:
   name: sensor-verwerker-pdb
   namespace: foodchain-db
-spec:
-  maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: sensor-verwerker
-
+  spec:
+    maxUnavailable: 0
+    selector:
+      matchLabels:
+        app: sensor-verwerker
 ---
 # NetworkPolicy voor isolatie (optional maar aanbevolen)
 apiVersion: networking.k8s.io/v1
