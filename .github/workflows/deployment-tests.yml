@@ -2,12 +2,12 @@ name: Deployment Tests CI
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "beta", "develop" ]
     paths:
       - "Local/Sensor-verwerker/**"
       - ".github/workflows/deployment-tests.yml"
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "beta", "develop" ]
     paths:
       - "Local/Sensor-verwerker/**"
 
