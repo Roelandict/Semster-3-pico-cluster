@@ -1,0 +1,147 @@
+name: Deployment Tests CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+    paths:
+      - "Local/Sensor-verwerker/**"
+      - ".github/workflows/deployment-tests.yml"
+  pull_request:
+    branches: [ "main", "develop" ]
+    paths:
+      - "Local/Sensor-verwerker/**"
+
+jobs:
+  yaml-validation:
+    runs-on: ubuntu-latest
+    name: Validate YAML Manifests
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'v1.28.0'
+    
+    - name: Validate deployment manifests
+      run: |
+        echo "Validating Kubernetes manifests..."
+        for file in Local/Sensor-verwerker/manifest/*.yaml; do
+          echo "Validating: $file"
+          kubectl apply --dry-run=client -f "$file"
+          if [ $? -eq 0 ]; then
+            echo "✓ $file is valid"
+          else
+            echo "✗ $file is invalid"
+            exit 1
+          fi
+        done
+
+  manifest-tests:
+    runs-on: ubuntu-latest
+    name: Run Deployment Tests
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v4
+      with:
+        version: 'v1.28.0'
+    
+    - name: Make test script executable
+      run: chmod +x Local/Sensor-verwerker/test-deployment.sh
+    
+    - name: Run deployment tests
+      run: ./Local/Sensor-verwerker/test-deployment.sh
+      continue-on-error: false
+
+  helm-chart-lint:
+    runs-on: ubuntu-latest
+    name: Lint Helm Charts (if applicable)
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: 'v3.13.0'
+    
+    - name: Check for Helm charts
+      run: |
+        # Check if there are Helm charts in the project
+        if find . -name "Chart.yaml" | grep -q .; then
+          echo "Found Helm charts, linting..."
+          find . -name "Chart.yaml" -type f | while read chart; do
+            dir=$(dirname "$chart")
+            echo "Linting: $dir"
+            helm lint "$dir"
+          done
+        else
+          echo "No Helm charts found"
+        fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Checks
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check for secrets in manifests
+      run: |
+        echo "Scanning for hardcoded secrets in manifests..."
+        if grep -r "password\|secret\|token\|key" Local/Sensor-verwerker/manifest/*.yaml | \
+           grep -v "secretRef\|secretKeyRef\|SecretKeyRef" | grep -v "#"; then
+          echo "⚠ Warning: Potential hardcoded secrets found in manifests"
+          exit 1
+        else
+          echo "✓ No hardcoded secrets detected"
+        fi
+    
+    - name: Validate security contexts
+      run: |
+        echo "Validating security contexts..."
+        if grep -q "runAsNonRoot: true" Local/Sensor-verwerker/manifest/deployment.yaml; then
+          echo "✓ Running as non-root user"
+        else
+          echo "✗ Pod should run as non-root"
+          exit 1
+        fi
+        
+        if grep -q "readOnlyRootFilesystem: true" Local/Sensor-verwerker/manifest/deployment.yaml; then
+          echo "✓ Read-only root filesystem enabled"
+        else
+          echo "⚠ Warning: Root filesystem is not read-only"
+        fi
+
+  resource-validation:
+    runs-on: ubuntu-latest
+    name: Validate Resource Limits
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Check resource requests and limits
+      run: |
+        echo "Checking resource configuration..."
+        if grep -q "requests:" Local/Sensor-verwerker/manifest/deployment.yaml && \
+           grep -q "limits:" Local/Sensor-verwerker/manifest/deployment.yaml; then
+          echo "✓ Resource requests and limits are defined"
+        else
+          echo "✗ Missing resource requests or limits"
+          exit 1
+        fi
+    
+    - name: Validate replicas configuration
+      run: |
+        echo "Checking replicas configuration..."
+        replicas=$(grep "replicas:" Local/Sensor-verwerker/manifest/deployment.yaml | awk '{print $2}')
+        if [ "$replicas" -ge 1 ]; then
+          echo "✓ Replicas configured: $replicas"
+        else
+          echo "✗ Invalid replicas value"
+          exit 1
+        fi
