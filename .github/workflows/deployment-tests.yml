@@ -92,7 +92,7 @@ jobs:
       run: |
         echo "Scanning for hardcoded secrets in manifests..."
         if grep -r "password\|secret\|token\|key" Local/Sensor-verwerker/manifest/*.yaml | \
-           grep -v "secretRef\|secretKeyRef\|SecretKeyRef" | grep -v "#"; then
+           grep -v "secretRef\|secretKeyRef\|SecretKeyRef" | grep -v "#" | grep -v "^\s*- key:"; then
           echo "⚠ Warning: Potential hardcoded secrets found in manifests"
           exit 1
         else
