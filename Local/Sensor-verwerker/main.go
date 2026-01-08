@@ -49,19 +49,32 @@ func main() {
 
 	// Test PostgREST connection first
 	fmt.Println("Testing PostgREST connectivity...")
-	if !testPostgRESTConnection() {
-		fmt.Println("Warning: PostgREST connection test failed, will continue anyway")
+
+	// Probeer tot 10 minuten lang verbinding te maken
+	deadline := time.Now().Add(10 * time.Minute)
+
+	for time.Now().Before(deadline) {
+		if testPostgRESTConnection() {
+			fmt.Println("PostgREST verbonden, start data verzending...")
+
+			ticker := time.NewTicker(1 * time.Minute)
+			defer ticker.Stop()
+
+			// Stuur onmiddellijk het eerste bericht
+			sendSensorData()
+
+			for range ticker.C {
+				sendSensorData()
+			}
+			return
+		}
+
+		// Nog geen verbinding, wacht 1 minuut voor volgende poging
+		fmt.Printf("Opnieuw proberen in 1 minuut...\n")
+		time.Sleep(1 * time.Minute)
 	}
 
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	// Stuur onmiddellijk het eerste bericht
-	sendSensorData()
-
-	for range ticker.C {
-		sendSensorData()
-	}
+	panic("FATAL: PostgREST is niet bereikbaar na 10 minuten!")
 }
 
 // testPostgRESTConnection checks if PostgREST is reachable
