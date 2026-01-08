@@ -5,8 +5,8 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-MANIFEST_DIR="$SCRIPT_DIR/manifest"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+MANIFEST_DIR="$SCRIPT_DIR/../manifest"
 
 echo "=================================="
 echo "Sensor Verwerker Deployment Tests"
