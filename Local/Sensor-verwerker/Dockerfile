@@ -3,10 +3,14 @@ FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod .
+COPY go.mod ./
 RUN go mod download
 
-COPY . .
+# Kopieer ALLEEN de Go-bestanden, niet de manifests
+COPY *.go ./
+COPY --chown=app:app . .
+
+
 
 # Build for the target platform (ARM64 for Raspberry Pi, AMD64 for standard Linux)
 # Docker automatically sets TARGETARCH at build time

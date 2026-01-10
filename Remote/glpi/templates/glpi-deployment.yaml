@@ -27,8 +27,8 @@ spec:
               value: {{ .Values.mariadb.auth.user | quote }}
             - name: GLPI_DB_PASSWORD
               value: {{ .Values.mariadb.auth.password | quote }}
-            - name: GLPI_AUTO_INSTALL
-              value: "false"
+            - name: GLPI_SKIP_AUTOUPDATE
+              value: "true"
             # Belangrijk: Vertel GLPI waar de nieuwe mappen staan
             - name: GLPI_CONFIG_DIR
               value: "/etc/glpi"

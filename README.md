@@ -10,9 +10,12 @@ The repository is organized into two main directories representing different dep
 Semster-3-pico-cluster/
 ├── .github/
 │   └── workflows/          # GitHub Actions CI/CD workflows
+│       └── deployment-tests.yml  # Automated deployment validation
 ├── Local/                  # Local cluster deployments and applications
 │   ├── Grafana/           # Grafana monitoring dashboards
 │   ├── Sensor-verwerker/  # Sensor data processing application (Go)
+│   │   ├── manifest/      # Kubernetes deployment manifests
+│   │   └── test/          # Deployment test scripts
 │   ├── api-server/        # REST API server for sensor data
 │   ├── argocd/            # ArgoCD GitOps configuration
 │   └── postgress-nativePG/ # CloudNativePG PostgreSQL cluster configuration
@@ -39,12 +42,16 @@ The local cluster hosts the core application components and infrastructure servi
 #### **Sensor-verwerker** (`/Local/Sensor-verwerker`)
 - **Language**: Go
 - **Purpose**: Processes IoT sensor data from Raspberry Pi Pico devices
+- **Features**:
+  - Automatic PostgREST connection retry (10-minute timeout with 1-minute intervals)
+  - JWT authentication for secure data transmission
+  - Multi-zone temperature aggregation from 30 sensors
 - **Components**:
-  - `main.go` - Core application logic
+  - `main.go` - Core application logic with improved connection resilience
   - `main_test.go` - Unit tests
   - `Dockerfile` - Container image definition
   - `manifest/` - Kubernetes deployment manifests
-  - `test-deployment.sh` - Deployment testing script
+  - `test/` - Test directory containing deployment test scripts
 
 #### **API Server** (`/Local/api-server`)
 - REST API endpoint for sensor data ingestion and retrieval
@@ -101,6 +108,9 @@ The remote cluster provides centralized services, authentication, and security:
 ### Local Cluster Workflow
 1. **Sensor Data Collection**: Raspberry Pi Pico devices send sensor readings to the API server
 2. **Data Processing**: The Sensor-verwerker application processes and transforms raw sensor data
+   - Aggregates data from 30 distributed sensors across three zones (Front, Middle, Back)
+   - Includes automatic PostgREST connection retry with 10-minute timeout
+   - Authenticates via JWT tokens
 3. **Data Storage**: Processed data is stored in the CloudNativePG PostgreSQL cluster
 4. **Visualization**: Grafana dashboards display real-time and historical sensor metrics
 5. **GitOps**: ArgoCD ensures all deployments stay synchronized with the Git repository
@@ -116,12 +126,14 @@ The remote cluster provides centralized services, authentication, and security:
 
 - **Container Orchestration**: Kubernetes
 - **GitOps**: ArgoCD
-- **Programming Language**: Go (Golang)
+- **Programming Language**: Go (Golang) with JWT authentication
 - **Database**: PostgreSQL with CloudNativePG operator
+- **API Gateway**: PostgREST for REST API data interface
 - **Monitoring**: Grafana + Prometheus
 - **Authentication**: Authentik (OAuth2/SAML/LDAP)
 - **Security Scanning**: Semgrep
 - **IT Service Management**: GLPI
+- **CI/CD**: GitHub Actions with YAML validation, security checks, and resource validation
 - **Hardware**: Raspberry Pi Pico cluster
 
 ## 📋 Prerequisites

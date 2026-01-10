@@ -2,7 +2,7 @@ name: Deployment Tests CI
 
 on:
   push:
-    branches: [ "beta", "develop" ]
+    branches: [ "beta-*", "develop" ]
     paths:
       - "Local/Sensor-verwerker/**"
       - ".github/workflows/deployment-tests.yml"
@@ -46,13 +46,13 @@ jobs:
         version: 'v1.28.0'
     
     - name: Make test script executable
-      run: chmod +x Local/Sensor-verwerker/test-deployment.sh
+      run: chmod +x Local/Sensor-verwerker/test/test-deployment.sh
     
     - name: create ns foodchain-db
       run: kubectl create namespace foodchain-db || echo "Namespace foodchain-db already exists"
       
     - name: Run deployment tests
-      run: ./Local/Sensor-verwerker/test-deployment.sh
+      run: ./Local/Sensor-verwerker/test/test-deployment.sh
       continue-on-error: false
 
   helm-chart-lint:

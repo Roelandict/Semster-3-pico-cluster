@@ -11,17 +11,53 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
-const (
-	PostgrestBase = "http://postgrest-service.foodchain-db.svc.cluster.local:3000"
-	PostgrestAPI  = PostgrestBase + "/currenttemperature"
-	JWTSecret     = "super-secret-jwt-key-conform-plan-van-aanpak"
-	TruckVIN      = "FC-TRUCK-2026-X99"
-	TruckID       = 42
-	SensorCount   = 30
+var (
+	PostgrestBase        string
+	PostgrestAPI         string
+	JWTSecret            string
+	TruckVIN             string
+	TruckID              int
+	SensorCount          int
+	tryMinutesUntilPanic int
 )
+
+func init() {
+	PostgrestBase = getEnv("POSTGREST_BASE_URL", "http://postgrest-service.foodchain-db.svc.cluster.local:3000")
+	PostgrestAPI = PostgrestBase + "/currenttemperature"
+	JWTSecret = getEnv("JWT_SECRET", "super-secret-jwt-key-conform-plan-van-aanpak")
+	TruckVIN = getEnv("TRUCK_VIN", "FC-TRUCK-2026-X99")
+
+	var err error
+	TruckID, err = strconv.Atoi(getEnv("TRUCK_ID", "42"))
+	if err != nil {
+		fmt.Printf("Warning: Invalid TRUCK_ID, using default 42. Error: %v\n", err)
+		TruckID = 42
+	}
+
+	SensorCount, err = strconv.Atoi(getEnv("SENSOR_COUNT", "30"))
+	if err != nil {
+		fmt.Printf("Warning: Invalid SENSOR_COUNT, using default 30. Error: %v\n", err)
+		SensorCount = 30
+	}
+
+	tryMinutesUntilPanic, err = strconv.Atoi(getEnv("TRY_MINUTES_UNTIL_PANIC", "10"))
+	if err != nil {
+		fmt.Printf("Warning: Invalid TRY_MINUTES_UNTIL_PANIC, using default 10. Error: %v\n", err)
+		tryMinutesUntilPanic = 10
+	}
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
 
 type Sensor struct {
 	ID    string
@@ -49,19 +85,32 @@ func main() {
 
 	// Test PostgREST connection first
 	fmt.Println("Testing PostgREST connectivity...")
-	if !testPostgRESTConnection() {
-		fmt.Println("Warning: PostgREST connection test failed, will continue anyway")
+
+	// Probeer tot 10 minuten lang verbinding te maken
+	deadline := time.Now().Add(time.Duration(tryMinutesUntilPanic) * time.Minute)
+
+	for time.Now().Before(deadline) {
+		if testPostgRESTConnection() {
+			fmt.Println("PostgREST verbonden, start data verzending...")
+
+			ticker := time.NewTicker(1 * time.Minute)
+			defer ticker.Stop()
+
+			// Stuur onmiddellijk het eerste bericht
+			sendSensorData()
+
+			for range ticker.C {
+				sendSensorData()
+			}
+			return
+		}
+
+		// Nog geen verbinding, wacht 1 minuut voor volgende poging
+		fmt.Printf("Opnieuw proberen in 1 minuut...\n")
+		time.Sleep(1 * time.Minute)
 	}
 
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	// Stuur onmiddellijk het eerste bericht
-	sendSensorData()
-
-	for range ticker.C {
-		sendSensorData()
-	}
+	panic("FATAL: PostgREST is niet bereikbaar na 10 minuten!")
 }
 
 // testPostgRESTConnection checks if PostgREST is reachable

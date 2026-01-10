@@ -6,7 +6,8 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-MANIFEST_DIR="$SCRIPT_DIR/manifest"
+MANIFEST_DIR="$SCRIPT_DIR/../manifest"
+SOURCE_DIR="$SCRIPT_DIR/.."  # Add this line to point to source directory
 
 echo "=================================="
 echo "Sensor Verwerker Deployment Tests"
@@ -58,13 +59,13 @@ run_test "test-deployment.yaml is valid YAML" \
 
 # Test 3: Check Go code structure
 run_test "main.go exists" \
-    "test -f $SCRIPT_DIR/main.go"
+    "test -f $SOURCE_DIR/main.go"
 
 run_test "main_test.go exists" \
-    "test -f $SCRIPT_DIR/main_test.go"
+    "test -f $SOURCE_DIR/main_test.go"
 
 run_test "go.mod exists" \
-    "test -f $SCRIPT_DIR/go.mod"
+    "test -f $SOURCE_DIR/go.mod"
 
 # Test 4: Check for required fields in deployment
 run_test "Deployment has replicas" \
@@ -93,17 +94,17 @@ run_test "Namespace configuration" \
 
 # Test 8: Verify Go code constants
 run_test "TruckVIN constant defined" \
-    "grep -q 'TruckVIN.*=.*FC-TRUCK' $SCRIPT_DIR/main.go"
+    "grep -q 'TruckVIN.*=.*FC-TRUCK' $SOURCE_DIR/main.go"
 
 run_test "PostgrestAPI constant defined" \
-    "grep -q 'PostgrestAPI' $SCRIPT_DIR/main.go"
+    "grep -q 'PostgrestAPI' $SOURCE_DIR/main.go"
 
 run_test "SensorCount constant defined" \
-    "grep -q 'SensorCount.*=' $SCRIPT_DIR/main.go"
+    "grep -q 'SensorCount.*=' $SOURCE_DIR/main.go"
 
 # Test 9: Dockerfile validation
 run_test "Dockerfile exists" \
-    "test -f $SCRIPT_DIR/Dockerfile"
+    "test -f $SOURCE_DIR/Dockerfile"
 
 # Print summary
 echo ""

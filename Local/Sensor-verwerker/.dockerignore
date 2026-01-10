@@ -21,3 +21,5 @@ node_modules
 vendor
 .coverage
 *.test
+./manifest/*.yaml
+./manifest/*.yml
