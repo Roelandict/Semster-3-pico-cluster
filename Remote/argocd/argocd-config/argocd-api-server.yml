@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: grafana-application
+  name: api-server
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: 'https://github.com/Roelandict/Semster-3-pico-cluster.git'  
     targetRevision: HEAD
-    path: Local/Grafana
+    path: Local/api-server  
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: grafana
+    namespace: foodchain-db
   syncPolicy:
     automated:
       prune: true

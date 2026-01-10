@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: grafana-application
+  name: native-pg-application
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: 'https://github.com/Roelandict/Semster-3-pico-cluster.git'  
     targetRevision: HEAD
-    path: Local/Grafana
+    path: Local/postgress-nativePG
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: grafana
+    namespace: cnpg-system
   syncPolicy:
     automated:
       prune: true
