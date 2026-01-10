@@ -90,6 +90,18 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: POSTGREST_BASE_URL
+          value: "http://postgrest-service.foodchain-db.svc.cluster.local:3000"
+        - name: JWT_SECRET
+          value: "super-secret-jwt-key-conform-plan-van-aanpak"
+        - name: TRUCK_VIN
+          value: "FC-TRUCK-2026-X99"
+        - name: TRUCK_ID
+          value: "42"
+        - name: SENSOR_COUNT
+          value: "30"
+        - name: TRY_MINUTES_UNTIL_PANIC
+          value: "10"
       
       # Pod disruption budget voor high availability
       affinity:
