@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: 'https://github.com/Roelandict/Semster-3-pico-cluster.git'  
     targetRevision: HEAD
-    path: Local/api-server  
+    path: Remote/api-server  
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: foodchain-db
