@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sensor-application
+  name: glpi
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/Roelandict/Semster-3-pico-cluster.git'  
+    repoURL: 'https://github.com/Roelandict/Semster-3-pico-cluster.git'
     targetRevision: HEAD
-    path: Local/Sensor-verwerker/manifest
+    path: Remote/glpi
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: foodchain-db
+    namespace: glpi
   syncPolicy:
     automated:
       prune: true
