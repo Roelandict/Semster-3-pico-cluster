@@ -19,6 +19,8 @@ spec:
         - name: glpi
           image: {{ .Values.glpi.image }}
           env:
+            - name: GLPI_INSTALL_OPTIONS
+              value: "--allow-superuser"
             - name: GLPI_DB_HOST
               value: {{ include "glpi.fullname" . }}-db
             - name: GLPI_DB_NAME
